@@ -45,6 +45,9 @@ export default function PaperDetailPage({ params }: { params: { id: string } }) 
   return (
     <main className="max-w-2xl mx-auto p-6">
       <h1 className="text-xl font-medium mb-4">Paper Summary</h1>
+      <a href={`/paper/${params.id}/chat`} className="text-sm text-blue-600 underline mb-4 inline-block">
+        Chat with this paper →
+      </a>
 
       {loading && <p className="text-sm text-gray-400">Generating summary… this can take a few seconds.</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}

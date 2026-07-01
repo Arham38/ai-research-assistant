@@ -1,5 +1,18 @@
-# PHASE 3: split paper text into overlapping chunks before embedding
+def chunk_text(text: str, chunk_size: int = 220, overlap: int = 70) -> list[str]:
+    """Word-based chunking with overlap. Smaller chunks = more precise semantic
+    matches, since a chunk mixing multiple topics dilutes its own embedding."""
+    words = text.split()
+    if not words:
+        return []
 
-def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
-    # TODO: token-aware chunking (or simple word-based split to start)
-    raise NotImplementedError
+    chunks = []
+    start = 0
+    while start < len(words):
+        end = start + chunk_size
+        chunk = " ".join(words[start:end])
+        chunks.append(chunk)
+        if end >= len(words):
+            break
+        start = end - overlap
+
+    return chunks

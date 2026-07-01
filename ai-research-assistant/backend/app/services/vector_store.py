@@ -1,19 +1,31 @@
-# PHASE 3: Chroma vector DB wrapper, one collection per paper_id
 import chromadb
 from app.config import settings
 
-client = chromadb.PersistentClient(path=settings.chroma_persist_dir)
+_client = None
+
+
+def get_client():
+    global _client
+    if _client is None:
+        _client = chromadb.PersistentClient(path=settings.chroma_persist_dir)
+    return _client
 
 
 def get_collection(paper_id: str):
-    return client.get_or_create_collection(name=f"paper_{paper_id}")
+    return get_client().get_or_create_collection(name=f"paper_{paper_id}")
+
+
+def is_indexed(paper_id: str) -> bool:
+    return get_collection(paper_id).count() > 0
 
 
 def index_chunks(paper_id: str, chunks: list[str], embeddings: list[list[float]]):
-    # TODO: collection.add(documents=chunks, embeddings=embeddings, ids=[...])
-    raise NotImplementedError
+    collection = get_collection(paper_id)
+    ids = [f"{paper_id}_{i}" for i in range(len(chunks))]
+    collection.add(documents=chunks, embeddings=embeddings, ids=ids)
 
 
-def retrieve_relevant(paper_id: str, query_embedding: list[float], top_k: int = 5):
-    # TODO: collection.query(query_embeddings=[query_embedding], n_results=top_k)
-    raise NotImplementedError
+def retrieve_relevant(paper_id: str, query_embedding: list[float], top_k: int = 5) -> list[str]:
+    results = get_collection(paper_id).query(query_embeddings=[query_embedding], n_results=top_k)
+    documents = results.get("documents")
+    return documents[0] if documents else []

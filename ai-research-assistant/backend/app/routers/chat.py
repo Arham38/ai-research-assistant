@@ -1,6 +1,66 @@
-# PHASE 3: POST /chat/{paper_id} — RAG: embed query, retrieve chunks, stream Groq answer via SSE
-from fastapi import APIRouter
+import json
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+
+from app.database import get_db
+from app.models.paper import Paper
+from app.utils.chunking import chunk_text
+from app.services.embeddings import embed_chunks, embed_query
+from app.services.vector_store import is_indexed, index_chunks, retrieve_relevant, get_collection
+from app.services.groq_client import answer_with_context_stream
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
-# TODO: @router.post("/{paper_id}")
+
+class ChatRequest(BaseModel):
+    question: str
+
+
+def ensure_indexed(paper_id: str, raw_text: str):
+    if is_indexed(paper_id):
+        return
+    chunks = chunk_text(raw_text)
+    if not chunks:
+        return
+    embeddings = embed_chunks(chunks)
+    index_chunks(paper_id, chunks, embeddings)
+
+
+def get_anchor_chunk(paper_id: str) -> str | None:
+    """The first indexed chunk covers the title/abstract/intro — the part that
+    usually answers broad framing questions like 'what problem does X solve'.
+    Always including it prevents those questions from missing pure semantic search."""
+    result = get_collection(paper_id).get(ids=[f"{paper_id}_0"])
+    documents = result.get("documents")
+    return documents[0] if documents else None
+
+
+@router.post("/{paper_id}")
+async def chat_with_paper(paper_id: str, body: ChatRequest, db: Session = Depends(get_db)):
+    paper = db.query(Paper).filter(Paper.id == paper_id).first()
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    if not paper.raw_text:
+        raise HTTPException(status_code=400, detail="This paper has no extracted text to search")
+
+    ensure_indexed(paper_id, paper.raw_text)
+
+    query_embedding = embed_query(body.question)
+    relevant_chunks = retrieve_relevant(paper_id, query_embedding, top_k=8)
+
+    if not relevant_chunks:
+        relevant_chunks = [paper.raw_text[:3000]]
+
+    anchor = get_anchor_chunk(paper_id)
+    if anchor and anchor not in relevant_chunks:
+        relevant_chunks = [anchor] + relevant_chunks
+
+    def event_stream():
+        for token in answer_with_context_stream(body.question, relevant_chunks):
+            payload = json.dumps({"token": token})
+            yield f"data: {payload}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")

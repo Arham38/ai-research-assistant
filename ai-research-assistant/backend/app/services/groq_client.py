@@ -23,7 +23,7 @@ PAPER TEXT:
 {text}
 """
 
-MAX_CHARS = 15000  # keep the prompt within Groq's context window
+MAX_CHARS = 15000
 
 
 def summarize_text(text: str) -> dict:
@@ -34,8 +34,8 @@ def summarize_text(text: str) -> dict:
         model=MODEL,
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
-        max_tokens=2000,  # was 1000 — too small, caused truncated/invalid JSON
-        response_format={"type": "json_object"},  # forces Groq to return valid JSON only
+        max_tokens=2000,
+        response_format={"type": "json_object"},
     )
 
     raw = response.choices[0].message.content.strip()
@@ -43,7 +43,6 @@ def summarize_text(text: str) -> dict:
 
     try:
         parsed = json.loads(raw)
-        # ensure all expected keys exist even if the model skipped one
         return {
             "problem_statement": parsed.get("problem_statement", ""),
             "methodology": parsed.get("methodology", ""),
@@ -59,3 +58,37 @@ def summarize_text(text: str) -> dict:
             "limitations": "",
             "conclusion": raw[:500],
         }
+
+
+CHAT_PROMPT = """You are answering questions about a specific research paper, using only the context excerpts below.
+
+Rules:
+- Base your answer only on the context excerpts — do not invent facts not present in them.
+- You MAY synthesize and paraphrase across multiple excerpts to form a complete answer, even if no single excerpt fully answers the question on its own.
+- Only say "I couldn't find that in this paper" if the excerpts genuinely contain nothing relevant to the question.
+- Be concise and direct.
+
+CONTEXT EXCERPTS:
+{context}
+
+QUESTION:
+{question}
+"""
+
+
+def answer_with_context_stream(question: str, context_chunks: list[str]):
+    context = "\n\n---\n\n".join(context_chunks)
+    prompt = CHAT_PROMPT.format(context=context, question=question)
+
+    stream = client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.2,
+        max_tokens=800,
+        stream=True,
+    )
+
+    for chunk in stream:
+        delta = chunk.choices[0].delta.content
+        if delta:
+            yield delta
