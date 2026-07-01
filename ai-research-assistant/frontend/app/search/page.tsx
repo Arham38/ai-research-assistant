@@ -21,13 +21,16 @@ export default function SearchPage() {
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
 
-  async function runSearch(q: string, pageNum = 1) {
+ async function runSearch(q: string, pageNum = 1) {
     setLoading(true);
     setQuery(q);
     try {
       const data = (await searchPapers(q, pageNum)) as Paper[];
       setResults(pageNum === 1 ? data : [...results, ...data]);
       setPage(pageNum);
+    } catch (err) {
+      console.error("Search failed:", err);
+      setResults([]);
     } finally {
       setLoading(false);
     }

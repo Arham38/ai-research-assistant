@@ -2,7 +2,7 @@ import httpx
 import xml.etree.ElementTree as ET
 from datetime import datetime
 
-ARXIV_API_URL = "http://export.arxiv.org/api/query"
+ARXIV_API_URL = "https://export.arxiv.org/api/query"  # https, not http
 ATOM_NS = "{http://www.w3.org/2005/Atom}"
 
 
@@ -14,11 +14,12 @@ async def search_arxiv(query: str, page: int = 1, page_size: int = 10):
         "max_results": page_size,
     }
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
         try:
             response = await client.get(ARXIV_API_URL, params=params)
             response.raise_for_status()
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            print(f"[arxiv_client] request failed: {type(e).__name__}: {e}")
             return []
 
     root = ET.fromstring(response.text)

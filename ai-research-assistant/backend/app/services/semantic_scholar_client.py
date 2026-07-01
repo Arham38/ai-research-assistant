@@ -17,7 +17,8 @@ async def search_semantic_scholar(query: str, page: int = 1, page_size: int = 10
         try:
             response = await client.get(S2_API_URL, params=params)
             response.raise_for_status()
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            print(f"[s2_client] request failed: {type(e).__name__}: {e}")
             return []
 
     data = response.json()
