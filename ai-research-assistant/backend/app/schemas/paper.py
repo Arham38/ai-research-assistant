@@ -1,4 +1,3 @@
-# PHASE 1/2: Pydantic models for search results + structured summary
 from pydantic import BaseModel
 from typing import Optional
 
@@ -13,7 +12,14 @@ class PaperResult(BaseModel):
     pdf_url: Optional[str] = None
 
 
-class PaperSummary(BaseModel):
+class UploadResponse(BaseModel):
+    paper_id: str
+    filename: str
+    char_count: int
+
+
+class SummaryResponse(BaseModel):
+    paper_id: str
     problem_statement: str
     methodology: str
     key_results: str

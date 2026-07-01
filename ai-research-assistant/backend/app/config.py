@@ -2,9 +2,9 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    database_url: str
+    database_url: str = "sqlite:///./research_assistant.db"
     groq_api_key: str
-    jwt_secret: str
+    jwt_secret: str = "dev-secret-change-in-production"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
     chroma_persist_dir: str = "./chroma_data"

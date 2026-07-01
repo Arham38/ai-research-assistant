@@ -1,5 +1,3 @@
-// Central API client — every component calls through here, never fetch() directly.
-
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -17,6 +15,18 @@ export function searchPapers(query: string, page = 1) {
 }
 
 // PHASE 2
+export async function uploadPdf(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_BASE_URL}/upload`, {
+    method: "POST",
+    body: formData, // no Content-Type header — browser sets the multipart boundary itself
+  });
+  if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+  return res.json();
+}
+
 export function summarizePaper(paperId: string) {
   return request(`/summarize/${paperId}`, { method: "POST" });
 }
@@ -33,5 +43,3 @@ export function comparePapers(paperIds: string[]) {
 export function generateLitReview(paperIds: string[], topic?: string) {
   return request(`/lit-review`, { method: "POST", body: JSON.stringify({ paper_ids: paperIds, topic }) });
 }
-
-// NOTE: Phase 3 chat uses Server-Sent Events, not this helper — handle separately in ChatBox.tsx
