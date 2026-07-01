@@ -1,4 +1,3 @@
-# PHASE 4: tags + notes + saved-paper associations for the personal library
 from sqlalchemy import Column, String, Text, ForeignKey
 from app.database import Base
 import uuid
@@ -13,6 +12,5 @@ class PaperTag(Base):
 
 class PaperNote(Base):
     __tablename__ = "paper_notes"
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    paper_id = Column(String, ForeignKey("papers.id"))
+    paper_id = Column(String, ForeignKey("papers.id"), primary_key=True)  # one note per paper
     note = Column(Text)

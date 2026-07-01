@@ -21,7 +21,7 @@ export async function uploadPdf(file: File) {
 
   const res = await fetch(`${API_BASE_URL}/upload`, {
     method: "POST",
-    body: formData, // no Content-Type header — browser sets the multipart boundary itself
+    body: formData,
   });
   if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
   return res.json();
@@ -32,9 +32,34 @@ export function summarizePaper(paperId: string) {
 }
 
 // PHASE 4
+export function saveToLibrary(paper: {
+  paper_id: string;
+  title: string;
+  authors: string[];
+  abstract?: string;
+  year?: number;
+  source: string;
+  pdf_url?: string;
+}) {
+  return request(`/library/save`, { method: "POST", body: JSON.stringify(paper) });
+}
+
 export function getLibrary() {
   return request(`/library`);
 }
+
+export function removeFromLibrary(paperId: string) {
+  return request(`/library/${paperId}`, { method: "DELETE" });
+}
+
+export function addTag(paperId: string, tag: string) {
+  return request(`/library/${paperId}/tag`, { method: "POST", body: JSON.stringify({ tag }) });
+}
+
+export function setNote(paperId: string, note: string) {
+  return request(`/library/${paperId}/note`, { method: "POST", body: JSON.stringify({ note }) });
+}
+
 export function comparePapers(paperIds: string[]) {
   return request(`/compare`, { method: "POST", body: JSON.stringify({ paper_ids: paperIds }) });
 }

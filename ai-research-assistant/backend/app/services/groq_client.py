@@ -92,3 +92,47 @@ def answer_with_context_stream(question: str, context_chunks: list[str]):
         delta = chunk.choices[0].delta.content
         if delta:
             yield delta
+
+
+COMPARE_PROMPT = """Compare the following research papers across these dimensions: Methodology, Dataset/Data Used, Key Results, Limitations.
+
+Respond with ONLY a valid JSON object, no preamble, no markdown fences, in exactly this shape:
+{{
+  "rows": [
+    {{"dimension": "Methodology", "values": {{"paper_id_1": "...", "paper_id_2": "..."}}}},
+    {{"dimension": "Dataset/Data Used", "values": {{"paper_id_1": "...", "paper_id_2": "..."}}}},
+    {{"dimension": "Key Results", "values": {{"paper_id_1": "...", "paper_id_2": "..."}}}},
+    {{"dimension": "Limitations", "values": {{"paper_id_1": "...", "paper_id_2": "..."}}}}
+  ]
+}}
+
+Use the exact paper_id values given below as the keys inside "values" for every row.
+Each value should be 1 concise sentence, in your own words, based only on the paper content below.
+
+PAPERS:
+{papers}
+"""
+
+
+def compare_papers(papers: list[dict]) -> list[dict]:
+    papers_text = "\n\n".join(
+        f'paper_id "{p["paper_id"]}" (title: {p["title"]}):\n{p["text"][:2500]}' for p in papers
+    )
+    prompt = COMPARE_PROMPT.format(papers=papers_text)
+
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3,
+        max_tokens=1500,
+        response_format={"type": "json_object"},
+    )
+
+    raw = response.choices[0].message.content.strip()
+    raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+
+    try:
+        parsed = json.loads(raw)
+        return parsed.get("rows", [])
+    except json.JSONDecodeError:
+        return [{"dimension": "Error", "values": {"note": "Could not parse comparison output."}}]

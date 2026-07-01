@@ -3,7 +3,7 @@
 import { useState } from "react";
 import SearchBar from "@/components/SearchBar";
 import PaperCard from "@/components/PaperCard";
-import { searchPapers } from "@/lib/api";
+import { searchPapers, saveToLibrary } from "@/lib/api";
 
 interface Paper {
   paper_id: string;
@@ -21,7 +21,7 @@ export default function SearchPage() {
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
 
- async function runSearch(q: string, pageNum = 1) {
+  async function runSearch(q: string, pageNum = 1) {
     setLoading(true);
     setQuery(q);
     try {
@@ -50,22 +50,30 @@ export default function SearchPage() {
         {results.map((paper) => (
           <PaperCard
             key={paper.paper_id}
+            paperId={paper.paper_id}
             title={paper.title}
             authors={paper.authors}
             year={paper.year}
             abstract={paper.abstract}
             source={paper.source}
             pdfUrl={paper.pdf_url}
+            onSave={() =>
+              saveToLibrary({
+                paper_id: paper.paper_id,
+                title: paper.title,
+                authors: paper.authors,
+                abstract: paper.abstract,
+                year: paper.year,
+                source: paper.source,
+                pdf_url: paper.pdf_url,
+              })
+            }
           />
         ))}
       </div>
 
       {results.length > 0 && (
-        <button
-          onClick={() => runSearch(query, page + 1)}
-          disabled={loading}
-          className="mt-4 text-sm text-gray-600 underline disabled:opacity-50"
-        >
+        <button onClick={() => runSearch(query, page + 1)} disabled={loading} className="mt-4 text-sm text-gray-600 underline disabled:opacity-50">
           {loading ? "Loading…" : "Load more"}
         </button>
       )}
