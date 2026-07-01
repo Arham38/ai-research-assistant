@@ -136,3 +136,45 @@ def compare_papers(papers: list[dict]) -> list[dict]:
         return parsed.get("rows", [])
     except json.JSONDecodeError:
         return [{"dimension": "Error", "values": {"note": "Could not parse comparison output."}}]
+
+LIT_REVIEW_PROMPT = """You are writing an academic literature review based on the paper summaries below.
+
+{topic_line}
+
+Write the review in well-structured Markdown with these elements:
+- A short introductory paragraph framing the research area{topic_clause}
+- Group the papers thematically (not one-by-one) — identify 2-4 themes/approaches across the papers and discuss each theme in its own subsection (use ## headings)
+- A section titled "Gaps and Contradictions" identifying disagreements, gaps, or open questions across the papers
+- A closing summary paragraph
+
+Write in an academic, third-person tone. Do not invent facts not present in the summaries below. Refer to papers by their title in-line when discussing them (no fabricated citation numbers).
+
+PAPER SUMMARIES:
+{papers}
+"""
+
+
+def generate_lit_review(summaries: list[dict], topic: str | None = None) -> str:
+    papers_text = "\n\n".join(
+        f"Title: {s['title']}\n"
+        f"Problem: {s['summary'].get('problem_statement', '')}\n"
+        f"Methodology: {s['summary'].get('methodology', '')}\n"
+        f"Key Results: {s['summary'].get('key_results', '')}\n"
+        f"Limitations: {s['summary'].get('limitations', '')}\n"
+        f"Conclusion: {s['summary'].get('conclusion', '')}"
+        for s in summaries
+    )
+
+    topic_line = f'Focus the review specifically on the theme: "{topic}"' if topic else ""
+    topic_clause = f' with a focus on "{topic}"' if topic else ""
+
+    prompt = LIT_REVIEW_PROMPT.format(topic_line=topic_line, topic_clause=topic_clause, papers=papers_text)
+
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.4,
+        max_tokens=2500,
+    )
+
+    return response.choices[0].message.content.strip()

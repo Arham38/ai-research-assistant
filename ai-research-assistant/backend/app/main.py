@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import search, upload, summarize, chat, library, compare
+from app.routers import search, upload, summarize, chat, library, compare, lit_review
 from app.database import Base, engine
 import app.models  # noqa: registers all models before create_all runs
 
@@ -32,7 +32,7 @@ app.include_router(summarize.router)
 app.include_router(chat.router)
 app.include_router(library.router)
 app.include_router(compare.router)
+app.include_router(lit_review.router)
 
-# PHASE 5 onwards
-# app.include_router(lit_review.router)
+# PHASE 6
 # app.include_router(auth.router)
