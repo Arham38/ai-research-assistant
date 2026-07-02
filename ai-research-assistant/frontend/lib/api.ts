@@ -112,3 +112,6 @@ export function comparePapers(paperIds: string[]) {
 export function generateLitReview(paperIds: string[], topic?: string) {
   return request(`/lit-review`, { method: "POST", body: JSON.stringify({ paper_ids: paperIds, topic }) });
 }
+export function getChatHistory(paperId: string) {
+  return request(`/chat/${paperId}/history`);
+}

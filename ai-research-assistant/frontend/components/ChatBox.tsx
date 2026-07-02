@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { getToken } from "@/lib/auth";
+import { getChatHistory } from "@/lib/api";
 
 interface Message {
   role: "user" | "assistant";
@@ -14,7 +15,25 @@ export default function ChatBox({ paperId }: { paperId: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getChatHistory(paperId)
+      .then((data) => {
+        if (!cancelled) setMessages(data as Message[]);
+      })
+      .catch(() => {
+        // no history yet, or failed to load — start fresh, not fatal
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingHistory(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [paperId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -86,15 +105,23 @@ export default function ChatBox({ paperId }: { paperId: string }) {
   }
 
   return (
-    // Height set to 100% so it perfectly fills the wrapper created in PaperChatPage
-    <div className="flex flex-col h-full w-full bg-white relative">
+    <div className="flex flex-col h-[75vh] w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative">
       
       {/* Scrollable Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-slate-50/30">
         
-        {messages.length === 0 && (
+        {/* Loading History State */}
+        {loadingHistory && (
+          <div className="h-full flex flex-col items-center justify-center space-y-3 opacity-70">
+            <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-800 rounded-full animate-spin"></div>
+            <p className="text-sm font-medium text-slate-500">Loading conversation...</p>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!loadingHistory && messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-70">
-            <div className="p-4 bg-slate-50 rounded-2xl shadow-sm border border-slate-100">
+            <div className="p-4 bg-white rounded-2xl shadow-sm border border-slate-100">
               <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                 <line x1="9" y1="10" x2="15" y2="10"></line>
@@ -108,23 +135,25 @@ export default function ChatBox({ paperId }: { paperId: string }) {
           </div>
         )}
 
+        {/* Chat Messages */}
         {messages.map((m, i) => (
           <div key={i} className={`flex w-full ${m.role === "user" ? "justify-end" : "justify-start"}`}>
             <div
               className={`max-w-[85%] sm:max-w-[75%] px-4 py-3 text-[15px] leading-relaxed whitespace-pre-wrap shadow-sm ${
                 m.role === "user"
                   ? "bg-slate-900 text-white rounded-2xl rounded-br-sm"
-                  : "bg-slate-50 text-slate-800 border border-slate-200 rounded-2xl rounded-bl-sm"
+                  : "bg-white text-slate-800 border border-slate-200 rounded-2xl rounded-bl-sm"
               }`}
             >
-              {/* Optional: Add a small label for assistant */}
               {m.role === "assistant" && (
                 <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a2 2 0 0 1 2 2c-.11.83.1 1.63.58 2.31A4 4 0 0 0 18 10a4 4 0 0 0-3.42 3.69c-.48.68-.69 1.48-.58 2.31a2 2 0 0 1-4 0c.11-.83-.1-1.63-.58-2.31A4 4 0 0 0 6 10a4 4 0 0 0 3.42-3.69c.48-.68.69-1.48.58-2.31a2 2 0 0 1 2-2z"></path></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2a2 2 0 0 1 2 2c-.11.83.1 1.63.58 2.31A4 4 0 0 0 18 10a4 4 0 0 0-3.42 3.69c-.48.68-.69 1.48-.58 2.31a2 2 0 0 1-4 0c.11-.83-.1-1.63-.58-2.31A4 4 0 0 0 6 10a4 4 0 0 0 3.42-3.69c.48-.68.69-1.48.58-2.31a2 2 0 0 1 2-2z"></path>
+                  </svg>
                   AI Assistant
                 </div>
               )}
-              {m.content || (streaming && i === messages.length - 1 ? <span className="animate-pulse">● ● ●</span> : "")}
+              {m.content || (streaming && i === messages.length - 1 ? <span className="animate-pulse text-slate-400">● ● ●</span> : "")}
             </div>
           </div>
         ))}
@@ -166,8 +195,8 @@ export default function ChatBox({ paperId }: { paperId: string }) {
             </svg>
           </button>
         </div>
-        <div className="text-center mt-2">
-          <p className="text-[11px] text-slate-400">AI can make mistakes. Verify important information from the source text.</p>
+        <div className="text-center mt-3">
+          <p className="text-[11px] text-slate-400 font-medium">AI can make mistakes. Verify important information from the source text.</p>
         </div>
       </div>
     </div>

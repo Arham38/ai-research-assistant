@@ -1,20 +1,17 @@
-from sqlalchemy import Column, String, ForeignKey
+from sqlalchemy import Column, String, DateTime, ForeignKey
 from sqlalchemy.types import Text
 from sqlalchemy.dialects.mysql import LONGTEXT
+from datetime import datetime, timezone
 from app.database import Base
 import uuid
 
 LongText = Text().with_variant(LONGTEXT(), "mysql")
 
 
-class PaperTag(Base):
-    __tablename__ = "paper_tags"
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     paper_id = Column(String(36), ForeignKey("papers.id"), index=True)
-    tag = Column(String(100))
-
-
-class PaperNote(Base):
-    __tablename__ = "paper_notes"
-    paper_id = Column(String(36), ForeignKey("papers.id"), primary_key=True)
-    note = Column(LongText)
+    role = Column(String(20))  # "user" or "assistant"
+    content = Column(LongText)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
