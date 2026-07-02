@@ -1,12 +1,41 @@
+import { getToken } from "./auth";
+import toast from "react-hot-toast"; // <-- Toast import kiya
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = getToken();
   const res = await fetch(`${API_BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     ...options,
   });
-  if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+
+  if (!res.ok) {
+    // Sirf 401 Unauthorized par Toast dikhayenge
+    if (res.status === 401) {
+      if (typeof window !== "undefined") {
+        toast.error("Please log in first!"); // <-- Yahan se alert hat gaya
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 1500);
+      }
+      return Promise.reject(new Error("Not authenticated"));
+    }
+    throw new Error(`API error ${res.status}: ${await res.text()}`);
+  }
+
   return res.json();
+}
+
+// AUTH
+export function registerUser(email: string, password: string) {
+  return request(`/auth/register`, { method: "POST", body: JSON.stringify({ email, password }) });
+}
+export function loginUser(email: string, password: string) {
+  return request(`/auth/login`, { method: "POST", body: JSON.stringify({ email, password }) });
 }
 
 // PHASE 1
@@ -18,12 +47,27 @@ export function searchPapers(query: string, page = 1) {
 export async function uploadPdf(file: File) {
   const formData = new FormData();
   formData.append("file", file);
+  const token = getToken();
 
   const res = await fetch(`${API_BASE_URL}/upload`, {
     method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     body: formData,
   });
-  if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      if (typeof window !== "undefined") {
+        toast.error("Please log in to upload!"); // <-- Yahan se bhi alert hat gaya
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 1500);
+      }
+      return Promise.reject(new Error("Not authenticated"));
+    }
+    throw new Error(`Upload failed: ${res.status}`);
+  }
+
   return res.json();
 }
 

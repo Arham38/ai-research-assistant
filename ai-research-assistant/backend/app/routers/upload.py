@@ -4,14 +4,20 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.paper import Paper
+from app.models.user import User
 from app.services.pdf_parser import extract_text
 from app.schemas.paper import UploadResponse
+from app.core.dependencies import get_current_user
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 
 
 @router.post("", response_model=UploadResponse)
-async def upload_pdf(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_pdf(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
 
@@ -31,6 +37,8 @@ async def upload_pdf(file: UploadFile = File(...), db: Session = Depends(get_db)
         authors="",
         source="upload",
         raw_text=text,
+        owner_id=current_user.id,
+        is_saved=True,
     )
     db.add(paper)
     db.commit()

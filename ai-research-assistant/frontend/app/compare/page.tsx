@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { comparePapers } from "@/lib/api";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 interface CompareRow {
   dimension: string;
@@ -77,8 +78,10 @@ function ComparePageInner() {
 
 export default function ComparePage() {
   return (
-    <Suspense fallback={<main className="max-w-4xl mx-auto p-6"><p className="text-sm text-gray-400">Loading…</p></main>}>
-      <ComparePageInner />
-    </Suspense>
+    <ProtectedRoute>
+      <Suspense fallback={<main className="max-w-4xl mx-auto p-6"><p className="text-sm text-gray-400">Loading…</p></main>}>
+        <ComparePageInner />
+      </Suspense>
+    </ProtectedRoute>
   );
 }

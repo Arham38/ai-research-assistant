@@ -1,15 +1,18 @@
 import json
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from app.database import get_db
 from app.models.paper import Paper
+from app.models.user import User
 from app.utils.chunking import chunk_text
 from app.services.embeddings import embed_chunks, embed_query
 from app.services.vector_store import is_indexed, index_chunks, retrieve_relevant, get_collection
 from app.services.groq_client import answer_with_context_stream
+from app.core.dependencies import get_current_user
+from app.core.limiter import limiter
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -29,17 +32,21 @@ def ensure_indexed(paper_id: str, raw_text: str):
 
 
 def get_anchor_chunk(paper_id: str) -> str | None:
-    """The first indexed chunk covers the title/abstract/intro — the part that
-    usually answers broad framing questions like 'what problem does X solve'.
-    Always including it prevents those questions from missing pure semantic search."""
     result = get_collection(paper_id).get(ids=[f"{paper_id}_0"])
     documents = result.get("documents")
     return documents[0] if documents else None
 
 
 @router.post("/{paper_id}")
-async def chat_with_paper(paper_id: str, body: ChatRequest, db: Session = Depends(get_db)):
-    paper = db.query(Paper).filter(Paper.id == paper_id).first()
+@limiter.limit("10/minute")
+async def chat_with_paper(
+    request: Request,
+    paper_id: str,
+    body: ChatRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    paper = db.query(Paper).filter(Paper.id == paper_id, Paper.owner_id == current_user.id).first()
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
     if not paper.raw_text:

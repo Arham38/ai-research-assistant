@@ -1,21 +1,33 @@
 import json
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.paper import Paper
+from app.models.user import User
 from app.schemas.lit_review import LitReviewRequest, LitReviewResponse
 from app.services.groq_client import generate_lit_review, summarize_text
+from app.core.dependencies import get_current_user
+from app.core.limiter import limiter
 
 router = APIRouter(prefix="/lit-review", tags=["lit-review"])
 
 
 @router.post("", response_model=LitReviewResponse)
-def create_lit_review(body: LitReviewRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def create_lit_review(
+    request: Request,
+    body: LitReviewRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     if len(body.paper_ids) < 2:
         raise HTTPException(status_code=400, detail="Select at least 2 papers for a literature review")
 
-    papers = db.query(Paper).filter(Paper.id.in_(body.paper_ids)).all()
+    papers = db.query(Paper).filter(
+        Paper.id.in_(body.paper_ids),
+        Paper.owner_id == current_user.id,
+    ).all()
     if len(papers) != len(body.paper_ids):
         raise HTTPException(status_code=404, detail="One or more papers not found")
 

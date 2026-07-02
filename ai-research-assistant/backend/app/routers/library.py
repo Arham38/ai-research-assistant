@@ -1,10 +1,13 @@
+import uuid
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.paper import Paper
 from app.models.collection import PaperTag, PaperNote
+from app.models.user import User
 from app.schemas.library import PaperSaveRequest, LibraryItem, TagRequest, NoteRequest
+from app.core.dependencies import get_current_user
 
 router = APIRouter(prefix="/library", tags=["library"])
 
@@ -27,39 +30,47 @@ def to_library_item(paper: Paper, db: Session) -> LibraryItem:
 
 
 @router.post("/save", response_model=LibraryItem)
-def save_paper(body: PaperSaveRequest, db: Session = Depends(get_db)):
-    paper = db.query(Paper).filter(Paper.id == body.paper_id).first()
-    if paper:
-        paper.is_saved = True
-        paper.title = paper.title or body.title
-        paper.abstract = paper.abstract or body.abstract
-        paper.year = paper.year or body.year
+def save_paper(body: PaperSaveRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    existing = db.query(Paper).filter(
+        Paper.owner_id == current_user.id,
+        Paper.external_id == body.paper_id,
+    ).first()
+
+    if existing:
+        existing.is_saved = True
+        paper = existing
     else:
         paper = Paper(
-            id=body.paper_id,
+            id=str(uuid.uuid4()),
+            external_id=body.paper_id,
             title=body.title,
             authors=", ".join(body.authors),
             abstract=body.abstract,
             year=body.year,
             source=body.source,
             pdf_url=body.pdf_url,
+            owner_id=current_user.id,
             is_saved=True,
         )
         db.add(paper)
+
     db.commit()
     db.refresh(paper)
     return to_library_item(paper, db)
 
 
 @router.get("", response_model=list[LibraryItem])
-def list_library(db: Session = Depends(get_db)):
-    papers = db.query(Paper).filter(Paper.is_saved == True).all()  # noqa: E712
+def list_library(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    papers = db.query(Paper).filter(
+        Paper.owner_id == current_user.id,
+        Paper.is_saved == True,  # noqa: E712
+    ).all()
     return [to_library_item(p, db) for p in papers]
 
 
 @router.delete("/{paper_id}")
-def remove_from_library(paper_id: str, db: Session = Depends(get_db)):
-    paper = db.query(Paper).filter(Paper.id == paper_id).first()
+def remove_from_library(paper_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    paper = db.query(Paper).filter(Paper.id == paper_id, Paper.owner_id == current_user.id).first()
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
     paper.is_saved = False
@@ -68,8 +79,8 @@ def remove_from_library(paper_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/{paper_id}/tag", response_model=LibraryItem)
-def add_tag(paper_id: str, body: TagRequest, db: Session = Depends(get_db)):
-    paper = db.query(Paper).filter(Paper.id == paper_id).first()
+def add_tag(paper_id: str, body: TagRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    paper = db.query(Paper).filter(Paper.id == paper_id, Paper.owner_id == current_user.id).first()
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
 
@@ -84,8 +95,8 @@ def add_tag(paper_id: str, body: TagRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/{paper_id}/note", response_model=LibraryItem)
-def set_note(paper_id: str, body: NoteRequest, db: Session = Depends(get_db)):
-    paper = db.query(Paper).filter(Paper.id == paper_id).first()
+def set_note(paper_id: str, body: NoteRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    paper = db.query(Paper).filter(Paper.id == paper_id, Paper.owner_id == current_user.id).first()
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
 
