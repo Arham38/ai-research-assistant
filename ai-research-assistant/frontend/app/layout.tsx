@@ -1,7 +1,26 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { IBM_Plex_Serif, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 import Navbar from "@/components/Navbar";
-import { Toaster } from "react-hot-toast"; // <-- Toast import kiya
+
+const displayFont = IBM_Plex_Serif({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-display",
+});
+
+const sansFont = IBM_Plex_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-sans",
+});
+
+const monoFont = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-mono",
+});
 
 export const metadata: Metadata = {
   title: "AI Research Assistant",
@@ -14,13 +33,23 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-white text-gray-900">
+    <html lang="en" className={`${displayFont.variable} ${sansFont.variable} ${monoFont.variable}`}>
+      <body className="min-h-screen bg-paper text-ink font-sans">
         <Navbar />
         {children}
-        
-        {/* Toast notifications display karne ke liye */}
-        <Toaster position="bottom-right" reverseOrder={false} />
+        <Toaster
+          position="bottom-right"
+          toastOptions={{
+            style: {
+              background: "#1B2A4A",
+              color: "#FFFFFF",
+              border: "1px solid #3D4F73",
+              borderRadius: "4px",
+              fontFamily: "var(--font-sans)",
+              fontSize: "13px",
+            },
+          }}
+        />
       </body>
     </html>
   );

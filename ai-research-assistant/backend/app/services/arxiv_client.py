@@ -1,9 +1,13 @@
 import httpx
 import xml.etree.ElementTree as ET
 from datetime import datetime
+import asyncio
 
-ARXIV_API_URL = "https://export.arxiv.org/api/query"  # https, not http
+ARXIV_API_URL = "https://export.arxiv.org/api/query"
 ATOM_NS = "{http://www.w3.org/2005/Atom}"
+HEADERS = {"User-Agent": "AI-Research-Assistant (contact: research@assistant.local)"}
+MAX_RETRIES = 3
+INITIAL_BACKOFF = 1  # seconds
 
 
 async def search_arxiv(query: str, page: int = 1, page_size: int = 10):
@@ -14,10 +18,29 @@ async def search_arxiv(query: str, page: int = 1, page_size: int = 10):
         "max_results": page_size,
     }
 
-    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+    for attempt in range(MAX_RETRIES):
         try:
-            response = await client.get(ARXIV_API_URL, params=params)
-            response.raise_for_status()
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                response = await client.get(ARXIV_API_URL, params=params, headers=HEADERS)
+                
+                if response.status_code == 429:  # Rate limited
+                    wait_time = INITIAL_BACKOFF * (2 ** attempt)
+                    print(f"[arxiv_client] Rate limited. Retrying in {wait_time}s (attempt {attempt + 1}/{MAX_RETRIES})")
+                    await asyncio.sleep(wait_time)
+                    continue
+                    
+                response.raise_for_status()
+                break  # Success
+                
+        except httpx.TimeoutException as e:
+            wait_time = INITIAL_BACKOFF * (2 ** attempt)
+            if attempt < MAX_RETRIES - 1:
+                print(f"[arxiv_client] Timeout. Retrying in {wait_time}s (attempt {attempt + 1}/{MAX_RETRIES})")
+                await asyncio.sleep(wait_time)
+                continue
+            else:
+                print(f"[arxiv_client] request failed: {type(e).__name__}: {e}")
+                return []
         except httpx.HTTPError as e:
             print(f"[arxiv_client] request failed: {type(e).__name__}: {e}")
             return []
