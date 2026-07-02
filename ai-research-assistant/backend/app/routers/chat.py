@@ -8,9 +8,9 @@ from app.database import get_db, SessionLocal
 from app.models.paper import Paper
 from app.models.chat_message import ChatMessage
 from app.models.user import User
-from app.utils.chunking import chunk_text
-from app.services.embeddings import embed_chunks, embed_query
-from app.services.vector_store import is_indexed, index_chunks, retrieve_relevant, get_collection
+from app.services.indexing import ensure_indexed
+from app.services.hybrid_retrieval import hybrid_retrieve
+from app.services.vector_store import get_collection
 from app.services.groq_client import answer_with_context_stream
 from app.core.dependencies import get_current_user
 from app.core.limiter import limiter
@@ -25,16 +25,6 @@ class ChatRequest(BaseModel):
 class ChatMessageOut(BaseModel):
     role: str
     content: str
-
-
-def ensure_indexed(paper_id: str, raw_text: str):
-    if is_indexed(paper_id):
-        return
-    chunks = chunk_text(raw_text)
-    if not chunks:
-        return
-    embeddings = embed_chunks(chunks)
-    index_chunks(paper_id, chunks, embeddings)
 
 
 def get_anchor_chunk(paper_id: str) -> str | None:
@@ -77,14 +67,23 @@ async def chat_with_paper(
     if not paper.raw_text:
         raise HTTPException(status_code=400, detail="This paper has no extracted text to search")
 
+    # usually a no-op now — background indexing already ran right after upload
     ensure_indexed(paper_id, paper.raw_text)
 
-    # save the user's question right away
+    # grab recent turns BEFORE adding the new question, so it isn't duplicated in its own history
+    recent = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.paper_id == paper_id)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(6)
+        .all()
+    )
+    history = [{"role": m.role, "content": m.content} for m in reversed(recent)]
+
     db.add(ChatMessage(paper_id=paper_id, role="user", content=body.question))
     db.commit()
 
-    query_embedding = embed_query(body.question)
-    relevant_chunks = retrieve_relevant(paper_id, query_embedding, top_k=8)
+    relevant_chunks = hybrid_retrieve(paper_id, body.question, top_k=8)
 
     if not relevant_chunks:
         relevant_chunks = [paper.raw_text[:3000]]
@@ -95,14 +94,12 @@ async def chat_with_paper(
 
     def event_stream():
         collected = []
-        for token in answer_with_context_stream(body.question, relevant_chunks):
+        for token in answer_with_context_stream(body.question, relevant_chunks, history=history):
             collected.append(token)
             payload = json.dumps({"token": token})
             yield f"data: {payload}\n\n"
         yield "data: [DONE]\n\n"
 
-        # use a fresh DB session here — the request-scoped one may already be
-        # closed by the time this generator finishes running
         answer_text = "".join(collected)
         session = SessionLocal()
         try:

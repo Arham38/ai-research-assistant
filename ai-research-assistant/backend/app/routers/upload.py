@@ -1,11 +1,12 @@
 import uuid
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.paper import Paper
 from app.models.user import User
 from app.services.pdf_parser import extract_text
+from app.services.background_jobs import process_paper_background
 from app.schemas.paper import UploadResponse
 from app.core.dependencies import get_current_user
 
@@ -14,6 +15,7 @@ router = APIRouter(prefix="/upload", tags=["upload"])
 
 @router.post("", response_model=UploadResponse)
 async def upload_pdf(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -43,5 +45,7 @@ async def upload_pdf(
     db.add(paper)
     db.commit()
     db.refresh(paper)
+
+    background_tasks.add_task(process_paper_background, paper.id)
 
     return UploadResponse(paper_id=paper.id, filename=file.filename, char_count=len(text))

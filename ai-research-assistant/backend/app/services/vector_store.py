@@ -29,3 +29,9 @@ def retrieve_relevant(paper_id: str, query_embedding: list[float], top_k: int = 
     results = get_collection(paper_id).query(query_embeddings=[query_embedding], n_results=top_k)
     documents = results.get("documents")
     return documents[0] if documents else []
+
+
+def get_all_chunks(paper_id: str) -> list[str]:
+    """Used by BM25 keyword search, which needs the full chunk set to score against."""
+    result = get_collection(paper_id).get()
+    return result.get("documents", []) or []

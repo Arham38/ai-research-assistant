@@ -15,3 +15,4 @@ chromadb
 bcrypt
 pyjwt
 slowapi
+rank-bm25

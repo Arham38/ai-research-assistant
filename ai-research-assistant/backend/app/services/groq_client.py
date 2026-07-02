@@ -60,13 +60,17 @@ def summarize_text(text: str) -> dict:
         }
 
 
-CHAT_PROMPT = """You are answering questions about a specific research paper, using only the context excerpts below.
+CHAT_PROMPT = """You are answering questions about a specific research paper, using only the context excerpts below and the recent conversation for continuity.
 
 Rules:
 - Base your answer only on the context excerpts — do not invent facts not present in them.
 - You MAY synthesize and paraphrase across multiple excerpts to form a complete answer, even if no single excerpt fully answers the question on its own.
+- Use the recent conversation only to understand what words like "it", "that", or "more" refer to — never as a source of facts.
 - Only say "I couldn't find that in this paper" if the excerpts genuinely contain nothing relevant to the question.
 - Be concise and direct.
+
+RECENT CONVERSATION:
+{history}
 
 CONTEXT EXCERPTS:
 {context}
@@ -76,9 +80,10 @@ QUESTION:
 """
 
 
-def answer_with_context_stream(question: str, context_chunks: list[str]):
+def answer_with_context_stream(question: str, context_chunks: list[str], history: list[dict] | None = None):
     context = "\n\n---\n\n".join(context_chunks)
-    prompt = CHAT_PROMPT.format(context=context, question=question)
+    history_text = "\n".join(f'{m["role"]}: {m["content"]}' for m in (history or [])) or "(no earlier messages)"
+    prompt = CHAT_PROMPT.format(history=history_text, context=context, question=question)
 
     stream = client.chat.completions.create(
         model=MODEL,
@@ -136,6 +141,7 @@ def compare_papers(papers: list[dict]) -> list[dict]:
         return parsed.get("rows", [])
     except json.JSONDecodeError:
         return [{"dimension": "Error", "values": {"note": "Could not parse comparison output."}}]
+
 
 LIT_REVIEW_PROMPT = """You are writing an academic literature review based on the paper summaries below.
 
