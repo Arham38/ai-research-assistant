@@ -16,3 +16,4 @@ bcrypt
 pyjwt
 slowapi
 rank-bm25
+pinecone-client
